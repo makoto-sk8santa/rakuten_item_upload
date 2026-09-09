@@ -1,0 +1,9 @@
+{
+  "name": "rakuten_item_upload",
+  "private": true,
+  "version": "0.1.0",
+  "description": "楽天商品登録自動化システム（Google Apps Script）",
+  "scripts": {
+    "test": "node --test gas/test/*.test.js"
+  }
+}
