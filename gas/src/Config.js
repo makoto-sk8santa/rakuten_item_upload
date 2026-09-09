@@ -65,13 +65,14 @@ var SKU_MANAGEMENT_NUMBER_OVERRIDES = {
   'f-bic-prt-01We2-01IVY': 'a003',
 };
 
-// 価格計算式のパラメータ。
-// 通常購入販売価格 = floor(販売価格 * PRICE_DISCOUNT_RATE / 10) * 10
-// 表示価格         = 通常購入販売価格 * PRICE_DISPLAY_MULTIPLIER + PRICE_DISPLAY_ADDITION
-// 参照: docs/data-analysis.md 5章（「名入れあり」オプションの一部で例外あり、要確認）
-var PRICE_DISCOUNT_RATE = 0.9;
-var PRICE_DISPLAY_MULTIPLIER = 2;
-var PRICE_DISPLAY_ADDITION = 10;
+// 価格：通常購入販売価格・表示価格ともに商品マスターの「販売価格」をそのまま使う。
+// （ダウンロード時点の楽天CSVはセール中で一時的に値引き後の価格になっていたため、
+//  そちらの数式は採用しない。ユーザー確認済み。docs/data-analysis.md 5章参照）
+
+// 在庫数：商品マスターに在庫列が無いため、登録時は一律0固定とする。
+// 商品ページ公開後、倉庫システムとのAPI連携で自動的に実在庫数へ更新される。
+// ユーザー確認済み。docs/data-analysis.md 7章参照。
+var DEFAULT_STOCK_COUNT = 0;
 
 if (typeof module !== 'undefined') {
   module.exports = {
@@ -82,8 +83,6 @@ if (typeof module !== 'undefined') {
     SKU_MANAGEMENT_NUMBER_RULE_BY_SIZE_CODE: SKU_MANAGEMENT_NUMBER_RULE_BY_SIZE_CODE,
     DEFAULT_SKU_MANAGEMENT_NUMBER_RULE: DEFAULT_SKU_MANAGEMENT_NUMBER_RULE,
     SKU_MANAGEMENT_NUMBER_OVERRIDES: SKU_MANAGEMENT_NUMBER_OVERRIDES,
-    PRICE_DISCOUNT_RATE: PRICE_DISCOUNT_RATE,
-    PRICE_DISPLAY_MULTIPLIER: PRICE_DISPLAY_MULTIPLIER,
-    PRICE_DISPLAY_ADDITION: PRICE_DISPLAY_ADDITION,
+    DEFAULT_STOCK_COUNT: DEFAULT_STOCK_COUNT,
   };
 }

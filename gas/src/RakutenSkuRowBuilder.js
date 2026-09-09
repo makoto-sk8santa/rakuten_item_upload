@@ -4,12 +4,12 @@
 if (typeof require !== 'undefined') {
   var _RB_SkuRules = require('./SkuRules');
   var _RB_VariationBuilder = require('./VariationBuilder');
+  var _RB_Config = require('./Config');
   var getSystemLinkedSkuNumber = _RB_SkuRules.getSystemLinkedSkuNumber;
   var getSkuManagementNumber = _RB_SkuRules.getSkuManagementNumber;
-  var isNamePersonalization = _RB_SkuRules.isNamePersonalization;
   var calcPrices = _RB_SkuRules.calcPrices;
-  var parseProductCode = _RB_SkuRules.parseProductCode;
   var buildVariation = _RB_VariationBuilder.buildVariation;
+  var DEFAULT_STOCK_COUNT = _RB_Config.DEFAULT_STOCK_COUNT;
 }
 
 /**
@@ -30,19 +30,12 @@ function buildSkuRow(masterRow, options) {
   var systemLinkedSkuNumber = getSystemLinkedSkuNumber(masterRow);
   var skuManagementNumber = getSkuManagementNumber(masterRow, options);
   var variation = buildVariation(masterRow);
-  var parsed = parseProductCode(masterRow);
 
   var salePrice = Number(masterRow['販売価格']);
   if (!isFinite(salePrice) || salePrice <= 0) {
     warnings.push('販売価格が不正です(商品コード=' + masterRow['商品コード'] + '): ' + masterRow['販売価格']);
   }
-  var prices = calcPrices(salePrice, { isNamePersonalization: isNamePersonalization(parsed.suffix) });
-  if (prices.reviewRequired) {
-    warnings.push(
-      '「名入れあり」SKUのため価格式が実データと一致しない例があります。金額を人間が確認してください(商品コード=' +
-      masterRow['商品コード'] + ', 自動計算した通常購入販売価格=' + prices.normal + ')。docs/data-analysis.md 5.2節参照。'
-    );
-  }
+  var prices = calcPrices(salePrice);
 
   var row = {
     'システム連携用SKU番号': systemLinkedSkuNumber,
@@ -57,6 +50,7 @@ function buildSkuRow(masterRow, options) {
     'バリエーション項目選択肢4': variation.Key3,
     '通常購入販売価格': prices.normal,
     '表示価格': prices.display,
+    '在庫数': DEFAULT_STOCK_COUNT,
     'カタログID': masterRow['識別コード'] || '',
   };
 

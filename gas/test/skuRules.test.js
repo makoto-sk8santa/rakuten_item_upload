@@ -9,7 +9,6 @@ const {
   getSkuManagementNumber,
   getAdditionalOptionLabel,
   getSetOptionLabel,
-  isNamePersonalization,
   calcPrices,
 } = require('../src/SkuRules');
 
@@ -76,27 +75,12 @@ test('getAdditionalOptionLabel / getSetOptionLabel: 接尾辞トークンから�
   assert.equal(getSetOptionLabel('-P-9H'), 'ケース&ガラスフィルムセット');
 });
 
-test('isNamePersonalization: Pトークンの有無で判定する', () => {
-  assert.equal(isNamePersonalization('-P'), true);
-  assert.equal(isNamePersonalization('-P-9H'), true);
-  assert.equal(isNamePersonalization('-MG'), false);
-  assert.equal(isNamePersonalization(''), false);
-});
-
-test('calcPrices: 一般式が成立するグループ(接尾辞なし/9H/MG/MG-9H)は実データと一致する', () => {
-  const generalSuffixes = ['', '-9H', '-MG', '-MG-9H'];
+test('calcPrices: 通常購入販売価格・表示価格ともに商品マスターの販売価格をそのまま使う', () => {
+  // ダウンロード時点の楽天CSVはセール中で一時的に値引きされていたため、
+  // その数式は採用しない（ユーザー確認済み。docs/data-analysis.md 5章）。
   for (const m of masterSample) {
-    const parsed = parseProductCode(m);
-    if (generalSuffixes.indexOf(parsed.suffix) === -1) continue;
-    const expected = expectedByCode.get(m['商品コード']);
-    const prices = calcPrices(m['販売価格'], { isNamePersonalization: false });
-    assert.equal(prices.normal, expected['通常購入販売価格'], m['商品コード']);
-    assert.equal(prices.display, expected['表示価格'], m['商品コード']);
-    assert.equal(prices.reviewRequired, false);
+    const prices = calcPrices(m['販売価格']);
+    assert.equal(prices.normal, m['販売価格'], m['商品コード']);
+    assert.equal(prices.display, m['販売価格'], m['商品コード']);
   }
-});
-
-test('calcPrices: 「名入れあり」(接尾辞にP)は reviewRequired=true になる', () => {
-  const prices = calcPrices(1980, { isNamePersonalization: true });
-  assert.equal(prices.reviewRequired, true);
 });

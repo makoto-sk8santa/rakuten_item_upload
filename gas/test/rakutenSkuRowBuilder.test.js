@@ -13,7 +13,7 @@ const expectedSample = JSON.parse(
 );
 const expectedByCode = new Map(expectedSample.map((e) => [e['商品コード'], e]));
 
-test('buildSkuRow: 一般式グループは実データと完全一致し、警告が出ない', () => {
+test('buildSkuRow: バリエーション・SKU番号は実データと完全一致し、価格・在庫は商品マスター基準になる', () => {
   const m = masterSample.find((m) => m['商品コード'] === 'f-bcpr-01We2-01IVY-9H');
   const expected = expectedByCode.get(m['商品コード']);
   const { row, warnings } = buildSkuRow(m, {});
@@ -24,16 +24,20 @@ test('buildSkuRow: 一般式グループは実データと完全一致し、警�
   assert.equal(row['バリエーション項目選択肢2'], expected['バリエーション項目選択肢2']);
   assert.equal(row['バリエーション項目選択肢3'], expected['バリエーション項目選択肢3']);
   assert.equal(row['バリエーション項目選択肢4'], expected['バリエーション項目選択肢4']);
-  assert.equal(row['通常購入販売価格'], expected['通常購入販売価格']);
-  assert.equal(row['表示価格'], expected['表示価格']);
+  // 価格は楽天CSVのセール中価格ではなく、商品マスターの販売価格をそのまま使う
+  assert.equal(row['通常購入販売価格'], m['販売価格']);
+  assert.equal(row['表示価格'], m['販売価格']);
+  // 在庫数は倉庫システムとのAPI連携で後から自動更新されるため一律0
+  assert.equal(row['在庫数'], 0);
   assert.deepEqual(warnings, []);
 });
 
-test('buildSkuRow: 「名入れあり」(-P-9H)は要確認の警告を出す', () => {
+test('buildSkuRow: 「名入れあり」(-P-9H)も価格は商品マスターの販売価格をそのまま使う', () => {
   const m = masterSample.find((m) => m['商品コード'] === 'f-bcpr-01We2-01IVY-P-9H');
-  const { warnings } = buildSkuRow(m, {});
-  assert.equal(warnings.length, 1);
-  assert.match(warnings[0], /名入れあり/);
+  const { row, warnings } = buildSkuRow(m, {});
+  assert.equal(row['通常購入販売価格'], m['販売価格']);
+  assert.equal(row['表示価格'], m['販売価格']);
+  assert.deepEqual(warnings, []);
 });
 
 test('buildSkuRow: レガシー例外(a003)は商品マスターにだけ基づいて自動的にSKU管理番号を再現する', () => {

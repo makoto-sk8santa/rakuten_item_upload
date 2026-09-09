@@ -7,9 +7,6 @@ if (typeof require !== 'undefined') {
   var SKU_MANAGEMENT_NUMBER_RULE_BY_SIZE_CODE = _Config.SKU_MANAGEMENT_NUMBER_RULE_BY_SIZE_CODE;
   var DEFAULT_SKU_MANAGEMENT_NUMBER_RULE = _Config.DEFAULT_SKU_MANAGEMENT_NUMBER_RULE;
   var SKU_MANAGEMENT_NUMBER_OVERRIDES = _Config.SKU_MANAGEMENT_NUMBER_OVERRIDES;
-  var PRICE_DISCOUNT_RATE = _Config.PRICE_DISCOUNT_RATE;
-  var PRICE_DISPLAY_MULTIPLIER = _Config.PRICE_DISPLAY_MULTIPLIER;
-  var PRICE_DISPLAY_ADDITION = _Config.PRICE_DISPLAY_ADDITION;
 }
 
 /**
@@ -87,28 +84,15 @@ function getSetOptionLabel(suffix) {
 }
 
 /**
- * 「名入れあり」(接尾辞に P を含む)SKUかどうか。
- * このグループは実データ上、価格計算式が一部成立しないケースがあるため
- * 価格の自動計算結果を鵜呑みにせず要確認フラグを立てる対象。
- * 参照: docs/data-analysis.md 5.2節
+ * 通常購入販売価格・表示価格を決定する。
+ * 商品マスターの「販売価格」をそのまま両方の値として使う（値引き計算はしない）。
+ * ダウンロード時点の楽天CSVはセール中で一時的に値引き後の価格になっていたため、
+ * その数式は採用しない（ユーザー確認済み。docs/data-analysis.md 5章参照）。
  */
-function isNamePersonalization(suffix) {
-  return hasSuffixToken(suffix, 'P');
-}
-
-/**
- * 通常購入販売価格・表示価格を計算する。
- * isNamePersonalization な行は式が成立しない実例があるため reviewRequired=true を返す
- * （CSV出力前に人間の確認を必須にする）。
- */
-function calcPrices(masterSalePrice, options) {
-  options = options || {};
-  var normal = Math.floor((masterSalePrice * PRICE_DISCOUNT_RATE) / 10) * 10;
-  var display = normal * PRICE_DISPLAY_MULTIPLIER + PRICE_DISPLAY_ADDITION;
+function calcPrices(masterSalePrice) {
   return {
-    normal: normal,
-    display: display,
-    reviewRequired: !!options.isNamePersonalization,
+    normal: masterSalePrice,
+    display: masterSalePrice,
   };
 }
 
@@ -120,7 +104,6 @@ if (typeof module !== 'undefined') {
     hasSuffixToken: hasSuffixToken,
     getAdditionalOptionLabel: getAdditionalOptionLabel,
     getSetOptionLabel: getSetOptionLabel,
-    isNamePersonalization: isNamePersonalization,
     calcPrices: calcPrices,
   };
 }
