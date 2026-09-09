@@ -13,13 +13,15 @@ const expectedSample = JSON.parse(
 );
 const expectedByCode = new Map(expectedSample.map((e) => [e['商品コード'], e]));
 
-test('buildSkuRow: バリエーション・SKU番号は実データと完全一致し、価格・在庫は商品マスター基準になる', () => {
+test('buildSkuRow: バリエーションは実データと完全一致し、SKU番号・価格・在庫は確定した方針どおりになる', () => {
   const m = masterSample.find((m) => m['商品コード'] === 'f-bcpr-01We2-01IVY-9H');
   const expected = expectedByCode.get(m['商品コード']);
   const { row, warnings } = buildSkuRow(m, {});
 
   assert.equal(row['システム連携用SKU番号'], m['商品コード']);
-  assert.equal(row['SKU管理番号'], expected['SKU管理番号']);
+  // 新規SKUのSKU管理番号は商品コードそのまま（ユーザー確認済み。過去のWe2/We2Plusの
+  // 末尾"5"付き採番は踏襲しない。既存SKUを保持したい場合はexistingSkuManagementNumberを渡す）
+  assert.equal(row['SKU管理番号'], m['商品コード']);
   assert.equal(row['バリエーション項目選択肢1'], expected['バリエーション項目選択肢1']);
   assert.equal(row['バリエーション項目選択肢2'], expected['バリエーション項目選択肢2']);
   assert.equal(row['バリエーション項目選択肢3'], expected['バリエーション項目選択肢3']);
@@ -30,6 +32,13 @@ test('buildSkuRow: バリエーション・SKU番号は実データと完全一�
   // 在庫数は倉庫システムとのAPI連携で後から自動更新されるため一律0
   assert.equal(row['在庫数'], 0);
   assert.deepEqual(warnings, []);
+});
+
+test('buildSkuRow: 既存登録済みSKUはexistingSkuManagementNumberでSKU管理番号を保持できる', () => {
+  const m = masterSample.find((m) => m['商品コード'] === 'f-bcpr-01We2-01IVY-9H');
+  const existing = expectedByCode.get(m['商品コード'])['SKU管理番号']; // 過去の"5"付き採番
+  const { row } = buildSkuRow(m, { existingSkuManagementNumber: existing });
+  assert.equal(row['SKU管理番号'], existing);
 });
 
 test('buildSkuRow: 「名入れあり」(-P-9H)も価格は商品マスターの販売価格をそのまま使う', () => {

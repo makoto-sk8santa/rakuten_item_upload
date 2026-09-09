@@ -6,11 +6,13 @@
 var MASTER_SHEET_NAME = '商品マスター';
 var TARGET_SHEET_NAME = '楽天登録対象';
 var OUTPUT_SHEET_NAME = '楽天SKU展開';
+var IMAGE_OUTPUT_SHEET_NAME = '楽天商品画像';
 
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('楽天登録データ作成')
     .addItem('SKU展開を実行', 'runSkuExpansion')
+    .addItem('商品画像パスを生成', 'runImageColumnGeneration')
     .addToUi();
 }
 
@@ -21,6 +23,12 @@ function onOpen() {
  *
  * 区分C（固定値）・D（AI生成）・E（人間確認）の列は Sheet5「楽天CSV出力」側で
  * 別途合成する想定（本ファイルでは未実装。Phase1の残タスク）。
+ *
+ * 注意：SKU管理番号は既定では商品コードそのまま（buildSkuRowのデフォルト）で計算する。
+ * 既に楽天に登録済みの代表商品コードを再実行する場合、既存のSKU管理番号を
+ * 上書きしてしまわないよう、既存の楽天CSVから読み取った値を
+ * buildSkuRow(row, { existingSkuManagementNumber: ... }) として渡す仕組みが必要
+ * （本関数では未実装。運用開始前に対応すること）。
  */
 function runSkuExpansion() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -55,6 +63,74 @@ function runSkuExpansion() {
       Logger.log(w);
     });
   }
+}
+
+/**
+ * 「楽天登録対象」シートでONになっている行の「画像枚数」列をもとに、
+ * 商品画像パス（区分B）を組み立てて「楽天商品画像」シートに書き出す。
+ *
+ * 画像の総枚数は商品マスターから自動判定できないため、「楽天登録対象」シートに
+ * あらかじめ「画像枚数」列（商品ごとに1回入力）を用意しておく必要がある。
+ * 実行のたびに枚数を尋ねるダイアログにはしていない（複数商品をまとめて処理する際に
+ * 毎回手が止まってしまうため）。docs/data-analysis.md 9章参照。
+ */
+function runImageColumnGeneration() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var targetSheet = ss.getSheetByName(TARGET_SHEET_NAME);
+  if (!targetSheet) {
+    throw new Error('「' + TARGET_SHEET_NAME + '」シートが見つかりません。');
+  }
+
+  var rows = readSheetAsObjects_(targetSheet).filter(function (row) {
+    return String(row['登録対象']).toUpperCase() === 'TRUE';
+  });
+
+  var outputRows = [];
+  var errors = [];
+  rows.forEach(function (row) {
+    var representativeCode = row['代表商品コード'];
+    var imageCount = Number(row['画像枚数']);
+    if (!Number.isInteger(imageCount) || imageCount < 1) {
+      errors.push('「画像枚数」が未入力または不正です(代表商品コード=' + representativeCode + '): ' + row['画像枚数']);
+      return;
+    }
+    var imageColumns = buildImageColumns(representativeCode, imageCount);
+    outputRows.push(
+      Object.assign({ '商品管理番号（商品URL）': representativeCode }, imageColumns)
+    );
+  });
+
+  writeImageRows_(ss, outputRows);
+
+  if (errors.length > 0) {
+    SpreadsheetApp.getUi().alert(
+      '「画像枚数」が未入力の商品が ' + errors.length + ' 件あります。' + TARGET_SHEET_NAME +
+      'シートに画像枚数を入力してから再実行してください。詳細はログ(表示 > ログ)を確認してください。'
+    );
+    errors.forEach(function (e) {
+      Logger.log(e);
+    });
+  }
+}
+
+function writeImageRows_(ss, outputRows) {
+  var sheet = ss.getSheetByName(IMAGE_OUTPUT_SHEET_NAME) || ss.insertSheet(IMAGE_OUTPUT_SHEET_NAME);
+  sheet.clearContents();
+  if (outputRows.length === 0) return;
+
+  // 商品ごとに画像枚数が異なるため、出力行の中で最も列数が多いものに合わせてヘッダーを揃える
+  var header = outputRows.reduce(function (longest, row) {
+    var keys = Object.keys(row);
+    return keys.length > longest.length ? keys : longest;
+  }, []);
+  var values = [header].concat(
+    outputRows.map(function (row) {
+      return header.map(function (key) {
+        return Object.prototype.hasOwnProperty.call(row, key) ? row[key] : '';
+      });
+    })
+  );
+  sheet.getRange(1, 1, values.length, header.length).setValues(values);
 }
 
 function readTargetRepresentativeCodes_(targetSheet) {

@@ -4,8 +4,6 @@
 // (GAS 上では Config.js が定義したグローバル変数をそのまま参照する)
 if (typeof require !== 'undefined') {
   var _Config = require('./Config');
-  var SKU_MANAGEMENT_NUMBER_RULE_BY_SIZE_CODE = _Config.SKU_MANAGEMENT_NUMBER_RULE_BY_SIZE_CODE;
-  var DEFAULT_SKU_MANAGEMENT_NUMBER_RULE = _Config.DEFAULT_SKU_MANAGEMENT_NUMBER_RULE;
   var SKU_MANAGEMENT_NUMBER_OVERRIDES = _Config.SKU_MANAGEMENT_NUMBER_OVERRIDES;
 }
 
@@ -42,10 +40,11 @@ function getSystemLinkedSkuNumber(masterRow) {
 /**
  * SKU管理番号を決定する。
  * - 既存登録済みSKU（options.existingSkuManagementNumber が渡された場合）は
- *   その値をそのまま返す。ルールで再計算し直して既存SKUの番号を変えてしまうと
+ *   その値をそのまま返す。再計算して既存SKUの番号を変えてしまうと
  *   RMS上で別SKU扱いになる恐れがあるため。
  * - レガシーな例外（Config.SKU_MANAGEMENT_NUMBER_OVERRIDES）が存在する場合はそちらを優先。
- * - それ以外（新規SKU）は機種(サイズコード)ごとのルールに従って生成する。
+ * - それ以外（新規SKU）は基本方針どおり商品コード（システム連携用SKU番号）をそのまま使う。
+ *   ユーザー確認済み（2026-09-09）。
  */
 function getSkuManagementNumber(masterRow, options) {
   options = options || {};
@@ -58,11 +57,7 @@ function getSkuManagementNumber(masterRow, options) {
     return options.existingSkuManagementNumber;
   }
 
-  var sizeCode = masterRow['サイズコード'];
-  var rule = SKU_MANAGEMENT_NUMBER_RULE_BY_SIZE_CODE[sizeCode] || DEFAULT_SKU_MANAGEMENT_NUMBER_RULE;
-  if (rule === 'suffix5') return systemLinkedSkuNumber + '5';
-  if (rule === 'identity') return systemLinkedSkuNumber;
-  throw new Error('未知のSKU管理番号ルールです: ' + rule);
+  return systemLinkedSkuNumber;
 }
 
 /** 商品コードの接尾辞（"-P-9H" 等）に指定トークンが含まれるか判定する */

@@ -44,15 +44,26 @@ test('getSystemLinkedSkuNumber: 商品コードをそのまま返す', () => {
   }
 });
 
-test('getSkuManagementNumber: 実データの全パターンと一致する', () => {
+test('getSkuManagementNumber: 新規SKUは基本的に商品コード(システム連携用SKU番号)をそのまま使う', () => {
+  // ユーザー確認済み（2026-09-09）。過去データにはWe2/We2Plusで末尾に"5"を付与した
+  // 例があるが、新規採番では踏襲しない。
   for (const m of masterSample) {
-    const expected = expectedByCode.get(m['商品コード']);
-    assert.equal(getSkuManagementNumber(m, {}), expected['SKU管理番号'], m['商品コード']);
+    if (m['商品コード'] === 'f-bic-prt-01We2-01IVY') continue; // レガシー例外(a003)は別テストで検証
+    assert.equal(getSkuManagementNumber(m, {}), m['商品コード'], m['商品コード']);
   }
 });
 
+test('getSkuManagementNumber: レガシー例外(a003)はConfigのオーバーライドを優先する', () => {
+  const m = masterSample.find((m) => m['商品コード'] === 'f-bic-prt-01We2-01IVY');
+  assert.equal(getSkuManagementNumber(m, {}), 'a003');
+});
+
 test('getSkuManagementNumber: 既存値が渡された場合はルールを無視してそのまま返す', () => {
-  const m = masterSample.find((m) => m['商品コード'] === 'f-bcpr-03We3-01IVY-9H');
+  // 既に登録済みのSKU(例: We2/We2Plusの末尾"5"付き番号)は、番号を変えると
+  // RMS上で別SKU扱いになりかねないため、既存値をそのまま保持できることを確認する。
+  const m = masterSample.find((m) => m['商品コード'] === 'f-bcpr-01We2-01IVY-9H');
+  const existing = expectedByCode.get(m['商品コード'])['SKU管理番号'];
+  assert.equal(getSkuManagementNumber(m, { existingSkuManagementNumber: existing }), existing);
   assert.equal(
     getSkuManagementNumber(m, { existingSkuManagementNumber: 'legacy-code-123' }),
     'legacy-code-123'

@@ -42,24 +42,13 @@ var COLOR_LABEL_BY_CODE = {
 var VARIATION_KEY_DEFINITION = 'Key0|Key1|Key2|Key3';
 var VARIATION_NAME_DEFINITION = '機種|カラー|追加オプション|お得なセット';
 
-// SKU管理番号の生成ルール。
-//   'suffix5'  : システム連携用SKU番号 + "5"
-//   'identity' : システム連携用SKU番号のまま
-// 実データでは機種(サイズコード)ごとに規則が異なる（arrows We2/We2 Plus は suffix5、
-// 最新機種の arrows We3 は identity）。
-// 参照: docs/data-analysis.md 2.2節
-var SKU_MANAGEMENT_NUMBER_RULE_BY_SIZE_CODE = {
-  '-01We2': 'suffix5',
-  '-02We2PLS': 'suffix5',
-  '-03We3': 'identity',
-};
-
-// 上記テーブルに無い新しい機種が来た場合のデフォルトルール。
-// 現状は直近の実績（arrows We3 = identity）に合わせているが、
-// 新機種追加のたびに実際の運用ルールを確認すること。
+// SKU管理番号：新規SKUは基本的に商品コード（システム連携用SKU番号）をそのまま使う。
+// ユーザー確認済み（2026-09-09）。
+// 既存登録済みSKUについては、番号を変えるとRMS上で別SKU扱いになりかねないため、
+// 呼び出し側から options.existingSkuManagementNumber を渡して現在の値を保持する。
 var DEFAULT_SKU_MANAGEMENT_NUMBER_RULE = 'identity';
 
-// 既存登録済みSKUのうち、上記ルールに従わないレガシー値。
+// 既存登録済みSKUのうち、上記ルールに従わないレガシー値（過去の採番）。
 // システム連携用SKU番号（=商品コード） -> 既存のSKU管理番号
 var SKU_MANAGEMENT_NUMBER_OVERRIDES = {
   'f-bic-prt-01We2-01IVY': 'a003',
@@ -74,15 +63,28 @@ var SKU_MANAGEMENT_NUMBER_OVERRIDES = {
 // ユーザー確認済み。docs/data-analysis.md 7章参照。
 var DEFAULT_STOCK_COUNT = 0;
 
+// 商品画像パスの規則。ユーザー確認済み（2026-09-09）。
+//   1枚目:     /top/{代表商品コード}.jpg
+//   2枚目以降: /sumahoya10/{代表商品コード}_{連番}.jpg  （連番は2, 3, 4, ...）
+// 画像の総枚数は商品マスターに情報が無いため、シート2「楽天登録対象」等に
+// 商品ごとの「画像枚数」列を設けて人間が入力する運用とする
+// （実行のたびに枚数を尋ねるダイアログは、複数商品をまとめて処理する際に
+//  手が止まってしまうため採用しない）。docs/data-analysis.md 9章参照。
+var IMAGE_TYPE = 'CABINET';
+var FIRST_IMAGE_DIR = '/top/';
+var OTHER_IMAGE_DIR = '/sumahoya10/';
+
 if (typeof module !== 'undefined') {
   module.exports = {
     KISHU_LABEL_BY_SIZE_CODE: KISHU_LABEL_BY_SIZE_CODE,
     COLOR_LABEL_BY_CODE: COLOR_LABEL_BY_CODE,
     VARIATION_KEY_DEFINITION: VARIATION_KEY_DEFINITION,
     VARIATION_NAME_DEFINITION: VARIATION_NAME_DEFINITION,
-    SKU_MANAGEMENT_NUMBER_RULE_BY_SIZE_CODE: SKU_MANAGEMENT_NUMBER_RULE_BY_SIZE_CODE,
     DEFAULT_SKU_MANAGEMENT_NUMBER_RULE: DEFAULT_SKU_MANAGEMENT_NUMBER_RULE,
     SKU_MANAGEMENT_NUMBER_OVERRIDES: SKU_MANAGEMENT_NUMBER_OVERRIDES,
     DEFAULT_STOCK_COUNT: DEFAULT_STOCK_COUNT,
+    IMAGE_TYPE: IMAGE_TYPE,
+    FIRST_IMAGE_DIR: FIRST_IMAGE_DIR,
+    OTHER_IMAGE_DIR: OTHER_IMAGE_DIR,
   };
 }
