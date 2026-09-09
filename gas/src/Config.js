@@ -42,17 +42,10 @@ var COLOR_LABEL_BY_CODE = {
 var VARIATION_KEY_DEFINITION = 'Key0|Key1|Key2|Key3';
 var VARIATION_NAME_DEFINITION = '機種|カラー|追加オプション|お得なセット';
 
-// SKU管理番号：新規SKUは基本的に商品コード（システム連携用SKU番号）をそのまま使う。
-// ユーザー確認済み（2026-09-09）。
-// 既存登録済みSKUについては、番号を変えるとRMS上で別SKU扱いになりかねないため、
-// 呼び出し側から options.existingSkuManagementNumber を渡して現在の値を保持する。
-var DEFAULT_SKU_MANAGEMENT_NUMBER_RULE = 'identity';
-
-// 既存登録済みSKUのうち、上記ルールに従わないレガシー値（過去の採番）。
-// システム連携用SKU番号（=商品コード） -> 既存のSKU管理番号
-var SKU_MANAGEMENT_NUMBER_OVERRIDES = {
-  'f-bic-prt-01We2-01IVY': 'a003',
-};
+// SKU管理番号：新規登録なので商品コード（システム連携用SKU番号）をそのまま使う
+// （SkuRules.js の getSkuManagementNumber）。ユーザー確認済み（2026-09-09）。
+// このシステムは新規商品登録のみを対象とし、既に楽天に登録済みの商品を
+// 再アップロードする運用は想定しないため、既存値を保持する仕組みは設けていない。
 
 // 価格：通常購入販売価格・表示価格ともに商品マスターの「販売価格」をそのまま使う。
 // （ダウンロード時点の楽天CSVはセール中で一時的に値引き後の価格になっていたため、
@@ -80,8 +73,6 @@ if (typeof module !== 'undefined') {
     COLOR_LABEL_BY_CODE: COLOR_LABEL_BY_CODE,
     VARIATION_KEY_DEFINITION: VARIATION_KEY_DEFINITION,
     VARIATION_NAME_DEFINITION: VARIATION_NAME_DEFINITION,
-    DEFAULT_SKU_MANAGEMENT_NUMBER_RULE: DEFAULT_SKU_MANAGEMENT_NUMBER_RULE,
-    SKU_MANAGEMENT_NUMBER_OVERRIDES: SKU_MANAGEMENT_NUMBER_OVERRIDES,
     DEFAULT_STOCK_COUNT: DEFAULT_STOCK_COUNT,
     IMAGE_TYPE: IMAGE_TYPE,
     FIRST_IMAGE_DIR: FIRST_IMAGE_DIR,

@@ -1,11 +1,7 @@
 // 商品マスターの「商品コード」を解析し、楽天SKU関連項目（システム連携用SKU番号、
 // SKU管理番号、追加オプション／セットの判定、価格）を算出するロジック。
-// GAS・Node.js の両方から読み込めるよう、Config の値は下記のガード節で取り込む。
-// (GAS 上では Config.js が定義したグローバル変数をそのまま参照する)
-if (typeof require !== 'undefined') {
-  var _Config = require('./Config');
-  var SKU_MANAGEMENT_NUMBER_OVERRIDES = _Config.SKU_MANAGEMENT_NUMBER_OVERRIDES;
-}
+// このシステムは新規商品登録のみを対象とし、既に楽天に登録済みの商品を
+// 再アップロードする運用は想定しない（ユーザー確認済み。2026-09-09）。
 
 /**
  * 商品マスターの1行から、商品コードの構造（プレフィックス／接尾辞）を取り出す。
@@ -38,26 +34,11 @@ function getSystemLinkedSkuNumber(masterRow) {
 }
 
 /**
- * SKU管理番号を決定する。
- * - 既存登録済みSKU（options.existingSkuManagementNumber が渡された場合）は
- *   その値をそのまま返す。再計算して既存SKUの番号を変えてしまうと
- *   RMS上で別SKU扱いになる恐れがあるため。
- * - レガシーな例外（Config.SKU_MANAGEMENT_NUMBER_OVERRIDES）が存在する場合はそちらを優先。
- * - それ以外（新規SKU）は基本方針どおり商品コード（システム連携用SKU番号）をそのまま使う。
- *   ユーザー確認済み（2026-09-09）。
+ * SKU管理番号を決定する。新規登録なので商品コード（システム連携用SKU番号）を
+ * そのまま使う。ユーザー確認済み（2026-09-09）。
  */
-function getSkuManagementNumber(masterRow, options) {
-  options = options || {};
-  var systemLinkedSkuNumber = getSystemLinkedSkuNumber(masterRow);
-
-  if (Object.prototype.hasOwnProperty.call(SKU_MANAGEMENT_NUMBER_OVERRIDES, systemLinkedSkuNumber)) {
-    return SKU_MANAGEMENT_NUMBER_OVERRIDES[systemLinkedSkuNumber];
-  }
-  if (options.existingSkuManagementNumber) {
-    return options.existingSkuManagementNumber;
-  }
-
-  return systemLinkedSkuNumber;
+function getSkuManagementNumber(masterRow) {
+  return getSystemLinkedSkuNumber(masterRow);
 }
 
 /** 商品コードの接尾辞（"-P-9H" 等）に指定トークンが含まれるか判定する */

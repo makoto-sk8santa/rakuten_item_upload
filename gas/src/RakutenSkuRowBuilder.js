@@ -13,22 +13,19 @@ if (typeof require !== 'undefined') {
 }
 
 /**
- * 商品マスターの1行から楽天SKU行を組み立てる。
+ * 商品マスターの1行から楽天SKU行を組み立てる。新規商品登録のみを対象とする
+ * （既に楽天に登録済みの商品の再アップロードは想定しない。ユーザー確認済み）。
  *
  * @param {Object} masterRow 商品マスターの1行（列名をキーとするオブジェクト）
- * @param {Object} [options]
- * @param {string} [options.existingSkuManagementNumber] 既に楽天に登録済みのSKU管理番号。
- *   渡された場合は再計算せずそのまま使う（既存SKUの番号を変えないため）。
  * @returns {Object} { row, warnings }
  *   row: 楽天CSVの列名をキーとする値（区分A・Bのみ）
  *   warnings: 自動計算結果を鵜呑みにせず人間の確認が必要な項目のメッセージ一覧
  */
-function buildSkuRow(masterRow, options) {
-  options = options || {};
+function buildSkuRow(masterRow) {
   var warnings = [];
 
   var systemLinkedSkuNumber = getSystemLinkedSkuNumber(masterRow);
-  var skuManagementNumber = getSkuManagementNumber(masterRow, options);
+  var skuManagementNumber = getSkuManagementNumber(masterRow);
   var variation = buildVariation(masterRow);
 
   var salePrice = Number(masterRow['販売価格']);

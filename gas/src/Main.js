@@ -19,16 +19,11 @@ function onOpen() {
 /**
  * 「商品マスター」シートを読み込み、「楽天登録対象」シートでONになっている
  * 代表商品コードに属する行だけを対象に、SKU行（区分A・Bの列）を計算して
- * 「楽天SKU展開」シートに書き出す。
+ * 「楽天SKU展開」シートに書き出す。新規商品登録のみを対象とする
+ * （既に楽天に登録済みの商品の再アップロードは想定しない）。
  *
  * 区分C（固定値）・D（AI生成）・E（人間確認）の列は Sheet5「楽天CSV出力」側で
  * 別途合成する想定（本ファイルでは未実装。Phase1の残タスク）。
- *
- * 注意：SKU管理番号は既定では商品コードそのまま（buildSkuRowのデフォルト）で計算する。
- * 既に楽天に登録済みの代表商品コードを再実行する場合、既存のSKU管理番号を
- * 上書きしてしまわないよう、既存の楽天CSVから読み取った値を
- * buildSkuRow(row, { existingSkuManagementNumber: ... }) として渡す仕組みが必要
- * （本関数では未実装。運用開始前に対応すること）。
  */
 function runSkuExpansion() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -48,7 +43,7 @@ function runSkuExpansion() {
       return targetCodes.indexOf(row['代表商品コード']) !== -1;
     })
     .forEach(function (row) {
-      var result = buildSkuRow(row, {});
+      var result = buildSkuRow(row);
       outputRows.push(result.row);
       allWarnings = allWarnings.concat(result.warnings);
     });

@@ -16,11 +16,11 @@ const expectedByCode = new Map(expectedSample.map((e) => [e['商品コード'], 
 test('buildSkuRow: バリエーションは実データと完全一致し、SKU番号・価格・在庫は確定した方針どおりになる', () => {
   const m = masterSample.find((m) => m['商品コード'] === 'f-bcpr-01We2-01IVY-9H');
   const expected = expectedByCode.get(m['商品コード']);
-  const { row, warnings } = buildSkuRow(m, {});
+  const { row, warnings } = buildSkuRow(m);
 
   assert.equal(row['システム連携用SKU番号'], m['商品コード']);
-  // 新規SKUのSKU管理番号は商品コードそのまま（ユーザー確認済み。過去のWe2/We2Plusの
-  // 末尾"5"付き採番は踏襲しない。既存SKUを保持したい場合はexistingSkuManagementNumberを渡す）
+  // 新規登録なのでSKU管理番号は商品コードそのまま（ユーザー確認済み。過去のWe2/We2Plusの
+  // 末尾"5"付き採番は踏襲しない。既存登録済み商品の再アップロードは対象外）
   assert.equal(row['SKU管理番号'], m['商品コード']);
   assert.equal(row['バリエーション項目選択肢1'], expected['バリエーション項目選択肢1']);
   assert.equal(row['バリエーション項目選択肢2'], expected['バリエーション項目選択肢2']);
@@ -34,29 +34,16 @@ test('buildSkuRow: バリエーションは実データと完全一致し、SKU�
   assert.deepEqual(warnings, []);
 });
 
-test('buildSkuRow: 既存登録済みSKUはexistingSkuManagementNumberでSKU管理番号を保持できる', () => {
-  const m = masterSample.find((m) => m['商品コード'] === 'f-bcpr-01We2-01IVY-9H');
-  const existing = expectedByCode.get(m['商品コード'])['SKU管理番号']; // 過去の"5"付き採番
-  const { row } = buildSkuRow(m, { existingSkuManagementNumber: existing });
-  assert.equal(row['SKU管理番号'], existing);
-});
-
 test('buildSkuRow: 「名入れあり」(-P-9H)も価格は商品マスターの販売価格をそのまま使う', () => {
   const m = masterSample.find((m) => m['商品コード'] === 'f-bcpr-01We2-01IVY-P-9H');
-  const { row, warnings } = buildSkuRow(m, {});
+  const { row, warnings } = buildSkuRow(m);
   assert.equal(row['通常購入販売価格'], m['販売価格']);
   assert.equal(row['表示価格'], m['販売価格']);
   assert.deepEqual(warnings, []);
 });
 
-test('buildSkuRow: レガシー例外(a003)は商品マスターにだけ基づいて自動的にSKU管理番号を再現する', () => {
-  const m = masterSample.find((m) => m['商品コード'] === 'f-bic-prt-01We2-01IVY');
-  const { row } = buildSkuRow(m, {});
-  assert.equal(row['SKU管理番号'], 'a003');
-});
-
 test('buildSkuRow: すべてのサンプル行で例外を投げずに処理できる', () => {
   for (const m of masterSample) {
-    assert.doesNotThrow(() => buildSkuRow(m, {}), m['商品コード']);
+    assert.doesNotThrow(() => buildSkuRow(m), m['商品コード']);
   }
 });
