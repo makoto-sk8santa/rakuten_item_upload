@@ -142,7 +142,9 @@ function runSkuExpansion() {
         outputRows.push(result.row);
         allWarnings = allWarnings.concat(result.warnings);
       } catch (e) {
-        skuErrors.push({ code: row['商品コード'], message: e.message });
+        // e.message だけだと発生箇所が分からず原因調査しづらいため、スタックトレース
+        // （どのファイルの何行目か）もあわせて記録する。
+        skuErrors.push({ code: row['商品コード'], message: e.message + '\n' + (e.stack || '') });
       }
     });
 
