@@ -7,14 +7,49 @@ var MASTER_SHEET_NAME = '商品マスター';
 var TARGET_SHEET_NAME = '楽天登録対象';
 var OUTPUT_SHEET_NAME = '楽天SKU展開';
 var IMAGE_OUTPUT_SHEET_NAME = '楽天商品画像';
+var REGISTRATION_TARGET_COLUMN_NAME = '登録対象';
+// プルダウンを設定しておく行数の余裕分（既存行数にこの分を足した範囲まで設定する）
+var TARGET_VALIDATION_ROW_BUFFER = 200;
 
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('楽天登録データ作成')
     .addItem('登録対象の候補を商品マスターから追加', 'syncTargetCandidates')
+    .addItem('登録対象列にプルダウンを設定', 'setupRegistrationDropdown')
     .addItem('SKU展開を実行', 'runSkuExpansion')
     .addItem('商品画像パスを生成', 'runImageColumnGeneration')
     .addToUi();
+}
+
+/**
+ * 「楽天登録対象」シートの「登録対象」列に、TRUE/FALSEのプルダウン（入力規則）を設定する。
+ * 毎回手入力するのが面倒という要望に対応。既存行数より少し多め（TARGET_VALIDATION_ROW_BUFFER分）
+ * まで設定しておくので、この後syncTargetCandidatesで追加される新しい行にもそのまま適用される。
+ * 何度実行しても上書きされるだけなので安全。
+ */
+function setupRegistrationDropdown() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var targetSheet = ss.getSheetByName(TARGET_SHEET_NAME);
+  if (!targetSheet) {
+    throw new Error('「' + TARGET_SHEET_NAME + '」シートが見つかりません。');
+  }
+  applyRegistrationDropdown_(targetSheet);
+  SpreadsheetApp.getUi().alert(
+    '「' + REGISTRATION_TARGET_COLUMN_NAME + '」列にプルダウン(TRUE/FALSE)を設定しました。'
+  );
+}
+
+function applyRegistrationDropdown_(targetSheet) {
+  var header = targetSheet.getRange(1, 1, 1, targetSheet.getLastColumn()).getValues()[0];
+  var colIndex = header.indexOf(REGISTRATION_TARGET_COLUMN_NAME) + 1; // 1始まりの列番号
+  if (colIndex === 0) return;
+
+  var rowCount = Math.max(targetSheet.getLastRow() - 1, 0) + TARGET_VALIDATION_ROW_BUFFER;
+  var rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['TRUE', 'FALSE'], true)
+    .setAllowInvalid(false)
+    .build();
+  targetSheet.getRange(2, colIndex, rowCount, 1).setDataValidation(rule);
 }
 
 /**
@@ -56,6 +91,7 @@ function syncTargetCandidates() {
   targetSheet
     .getRange(targetSheet.getLastRow() + 1, 1, newRows.length, header.length)
     .setValues(newRows);
+  applyRegistrationDropdown_(targetSheet);
 
   SpreadsheetApp.getUi().alert(
     missingCodes.length + '件の代表商品コードを「' + TARGET_SHEET_NAME + '」に追加しました(登録対象=FALSE)。' +
