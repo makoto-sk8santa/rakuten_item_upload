@@ -7,6 +7,9 @@ var MASTER_SHEET_NAME = '商品マスター';
 var TARGET_SHEET_NAME = '楽天登録対象';
 var OUTPUT_SHEET_NAME = '楽天SKU展開';
 var IMAGE_OUTPUT_SHEET_NAME = '楽天商品画像';
+// SKU展開・画像パス生成でエラーになった行を書き出すシート。Apps Scriptの実行ログを
+// 開かなくてもスプレッドシート上でエラー内容を確認できるようにするため。
+var ERROR_SHEET_NAME = 'エラー一覧';
 // 機種・カラー以外の追加バリエーション軸（タイプ、文字入れの有無等）を商品ごとに
 // 人力で登録しておくシート。無くてもエラーにはしない（該当商品が無ければ単に使わない）。
 // docs/data-analysis.md 12.3節(4)参照。
@@ -139,20 +142,19 @@ function runSkuExpansion() {
         outputRows.push(result.row);
         allWarnings = allWarnings.concat(result.warnings);
       } catch (e) {
-        skuErrors.push('商品コード=' + row['商品コード'] + ': ' + e.message);
+        skuErrors.push({ code: row['商品コード'], message: e.message });
       }
     });
 
   writeSkuRows_(ss, outputRows);
+  writeErrorRows_(ss, skuErrors);
 
   if (skuErrors.length > 0) {
     SpreadsheetApp.getUi().alert(
       'エラーで出力できなかった商品コードが ' + skuErrors.length + ' 件あります。' +
-      '詳細はログ(表示 > ログ)を確認し、商品マスターを修正してから再実行してください。'
+      '「' + ERROR_SHEET_NAME + '」シートに詳細を書き出したので確認してください' +
+      '（販売価格が空欄の行は、セット商品組み立て用の部品行の可能性があり、その場合は正常です）。'
     );
-    skuErrors.forEach(function (e) {
-      Logger.log(e);
-    });
   }
 
   if (allWarnings.length > 0) {
@@ -191,7 +193,7 @@ function runImageColumnGeneration() {
     var representativeCode = row['代表商品コード'];
     var imageCount = Number(row['画像枚数']);
     if (!Number.isInteger(imageCount) || imageCount < 1) {
-      errors.push('「画像枚数」が未入力または不正です(代表商品コード=' + representativeCode + '): ' + row['画像枚数']);
+      errors.push({ code: representativeCode, message: '「画像枚数」が未入力または不正です: "' + row['画像枚数'] + '"' });
       return;
     }
     var imageColumns = buildImageColumns(representativeCode, imageCount);
@@ -201,16 +203,30 @@ function runImageColumnGeneration() {
   });
 
   writeImageRows_(ss, outputRows);
+  writeErrorRows_(ss, errors);
 
   if (errors.length > 0) {
     SpreadsheetApp.getUi().alert(
       '「画像枚数」が未入力の商品が ' + errors.length + ' 件あります。' + TARGET_SHEET_NAME +
-      'シートに画像枚数を入力してから再実行してください。詳細はログ(表示 > ログ)を確認してください。'
+      'シートに画像枚数を入力してから再実行してください。「' + ERROR_SHEET_NAME + '」シートに詳細を書き出しました。'
     );
-    errors.forEach(function (e) {
-      Logger.log(e);
-    });
   }
+}
+
+/**
+ * SKU展開・画像パス生成でエラーになった行を「エラー一覧」シートに書き出す。
+ * エラーが0件でも、前回実行時のエラーが残らないようシートは常に上書きする。
+ */
+function writeErrorRows_(ss, errors) {
+  var sheet = ss.getSheetByName(ERROR_SHEET_NAME) || ss.insertSheet(ERROR_SHEET_NAME);
+  sheet.clearContents();
+  var header = ['対象コード', 'エラー内容'];
+  var values = [header].concat(
+    errors.map(function (e) {
+      return [e.code, e.message];
+    })
+  );
+  sheet.getRange(1, 1, values.length, header.length).setValues(values);
 }
 
 function writeImageRows_(ss, outputRows) {
