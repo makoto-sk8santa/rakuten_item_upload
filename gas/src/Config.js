@@ -2,41 +2,52 @@
 // 将来的には Google スプレッドシート「設定・固定値マスター」シートに移し、
 // ここでは初期値（今回の実データから抽出した値）を保持する。
 
-// サイズコード(機種コード) -> バリエーション表示名（Key0）
-var KISHU_LABEL_BY_SIZE_CODE = {
-  '-01We2': 'arrows We2',
-  '-02We2PLS': 'arrows We2 Plus',
-  '-03We3': 'arrows We3',
+// 機種・カラーの表示名は、商品マスターの「機種」「カラー」列の値をそのまま使うのが既定。
+// 全商品マスター（1622商品・628種のサイズコード・740種のカラーコードを確認。2026-09-10）
+// を見ると、コードごとに表示名を手動登録するConfigの固定表を取っていた旧方式は現実的で
+// ない規模だったため、この方針に変更した。
+//
+// ただし商品マスターの表記をそのまま信用できない場合もある。実際に楽天へ登録された
+// 表示名で確認済みの代表商品コードについては、下記のようにピンポイントで上書きする。
+// キーは "代表商品コード|コード"。docs/data-analysis.md 4章・11章参照。
+var KISHU_LABEL_OVERRIDES = {
 };
 
-// カラーコード -> バリエーション表示名（Key1）
-//
-// 注意: 商品マスターの「カラー」列は表記ゆれ・不整合がある
-// （例: カラーコード -01IVY が「アイボリー」「ペールピンク」の両方で登録されている）。
-// そのため商品マスターの「カラー」列は使わず、このテーブルを正として扱う。
-// 値は今回の楽天CSV実データ（バリエーション項目選択肢2）から抽出したもの。
-// 参照: docs/data-analysis.md 4章
-var COLOR_LABEL_BY_CODE = {
-  '-01IVY': '01.ペールピンク',
-  '-02PNK': '02.ピンク',
-  '-03PPL': '03.パープル',
-  '-04GRN': '04.グリーン',
-  '-05GRY': '05.グレー',
-  '-06BLK': '06.ブラック',
-  '-07BLU': '07.ブルー',
-  '-08WHT-BG': '08.ホワイト/ベージュ',
-  '-08WHT-BGE': '08.ホワイト/ベージュ',
-  '-09BGE-BG': '09.ベージュ/ベージュ',
-  '-09BGE-BGE': '09.ベージュ/ベージュ',
-  '-10WHT-BL': '10.ホワイト/ブラック',
-  '-10WHT-BLK': '10.ホワイト/ブラック',
-  '-11APR': '11.アプリコット',
-  '-12EGG': '12.エッグイエロー',
-  '-13PCO': '13.ピスタチオ',
-  '-14DSP': '14.ダスティピンク',
-  '-15GBE': '15.グレージュ',
-  '-16LiGRY': '16.ライトグレー',
+// f-bic-prt: 実際の楽天CSVでは色名の先頭に "NN." という連番が付く表記になっており
+// （例: -01IVY → "01.ペールピンク"）、商品マスターの「カラー」列にはこの連番が無いため
+// （さらに -01IVY だけは商品マスター内でも「アイボリー」と表記が割れている）、
+// 検証済みの19色すべてを明示的に上書きしている。
+var COLOR_LABEL_OVERRIDES = {
+  'f-bic-prt|-01IVY': '01.ペールピンク',
+  'f-bic-prt|-02PNK': '02.ピンク',
+  'f-bic-prt|-03PPL': '03.パープル',
+  'f-bic-prt|-04GRN': '04.グリーン',
+  'f-bic-prt|-05GRY': '05.グレー',
+  'f-bic-prt|-06BLK': '06.ブラック',
+  'f-bic-prt|-07BLU': '07.ブルー',
+  'f-bic-prt|-08WHT-BG': '08.ホワイト/ベージュ',
+  'f-bic-prt|-08WHT-BGE': '08.ホワイト/ベージュ',
+  'f-bic-prt|-09BGE-BG': '09.ベージュ/ベージュ',
+  'f-bic-prt|-09BGE-BGE': '09.ベージュ/ベージュ',
+  'f-bic-prt|-10WHT-BL': '10.ホワイト/ブラック',
+  'f-bic-prt|-10WHT-BLK': '10.ホワイト/ブラック',
+  'f-bic-prt|-11APR': '11.アプリコット',
+  'f-bic-prt|-12EGG': '12.エッグイエロー',
+  'f-bic-prt|-13PCO': '13.ピスタチオ',
+  'f-bic-prt|-14DSP': '14.ダスティピンク',
+  'f-bic-prt|-15GBE': '15.グレージュ',
+  'f-bic-prt|-16LiGRY': '16.ライトグレー',
 };
+
+// 「追加オプション(名入れ)」「お得なセット」の軸は、商品コード接尾辞のP/MG/9Hトークンから
+// 判定している（docs/data-analysis.md 6.2節・11章）。このルールは f-bic-prt 等ごく一部
+// （全商品マスターの中の約3.6%）でしか確認できておらず、他の商品にそのまま当てはめると
+// 誤ったバリエーション名を作ってしまう（実データで検証済み。約8%の商品で接尾辞の
+// トークンを誤検出する）。そのため、この配列に登録された代表商品コードの商品にだけ
+// 適用する。他の商品群でも同じ命名規則を使っている場合はここに追加すること。
+var SUFFIX_OPTION_AXES_REPRESENTATIVE_CODES = [
+  'f-bic-prt',
+];
 
 // バリエーション項目キー・項目名（4軸固定）
 var VARIATION_KEY_DEFINITION = 'Key0|Key1|Key2|Key3';
@@ -69,8 +80,9 @@ var OTHER_IMAGE_DIR = '/sumahoya10/';
 
 if (typeof module !== 'undefined') {
   module.exports = {
-    KISHU_LABEL_BY_SIZE_CODE: KISHU_LABEL_BY_SIZE_CODE,
-    COLOR_LABEL_BY_CODE: COLOR_LABEL_BY_CODE,
+    KISHU_LABEL_OVERRIDES: KISHU_LABEL_OVERRIDES,
+    COLOR_LABEL_OVERRIDES: COLOR_LABEL_OVERRIDES,
+    SUFFIX_OPTION_AXES_REPRESENTATIVE_CODES: SUFFIX_OPTION_AXES_REPRESENTATIVE_CODES,
     VARIATION_KEY_DEFINITION: VARIATION_KEY_DEFINITION,
     VARIATION_NAME_DEFINITION: VARIATION_NAME_DEFINITION,
     DEFAULT_STOCK_COUNT: DEFAULT_STOCK_COUNT,

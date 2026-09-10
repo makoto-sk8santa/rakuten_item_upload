@@ -42,24 +42,48 @@ test('buildSkuRow: 「名入れあり」(-P-9H)も価格は商品マスターの
   assert.deepEqual(warnings, []);
 });
 
-test('buildSkuRow: サイズコードが空欄の商品(機種の軸なし)は3軸分だけ出力し、4軸目は含まない', () => {
+test('buildSkuRow: サイズコードが空欄の商品(機種の軸なし・未検証の代表商品コード)はカラー1軸だけ出力する', () => {
+  // 代表商品コードがConfig.SUFFIX_OPTION_AXES_REPRESENTATIVE_CODESに無いため、
+  // 追加オプション/セットの軸は出力しない（docs/data-analysis.md 11章）
   const colorOnly = {
-    '商品コード': 'x-color-only-01IVY',
+    '商品コード': 'x-color-only-01BLK',
+    '代表商品コード': 'x-color-only',
     'サイズコード': '',
-    'カラーコード': '-01IVY',
+    'カラーコード': '-01BLK',
+    'カラー': 'ブラック',
     '識別コード': '1234567890123',
     '販売価格': '1000',
   };
   const { row, warnings } = buildSkuRow(colorOnly);
   assert.equal(row['バリエーション項目キー1'], 'Key0');
-  assert.equal(row['バリエーション項目選択肢1'], '01.ペールピンク');
-  assert.equal(row['バリエーション項目キー2'], 'Key1');
-  assert.equal(row['バリエーション項目選択肢2'], '名入れ無し');
-  assert.equal(row['バリエーション項目キー3'], 'Key2');
-  assert.equal(row['バリエーション項目選択肢3'], 'ケース単品');
-  assert.equal(row['バリエーション項目キー4'], undefined);
-  assert.equal(row['バリエーション項目選択肢4'], undefined);
+  assert.equal(row['バリエーション項目選択肢1'], 'ブラック');
+  assert.equal(row['バリエーション項目キー2'], undefined);
+  assert.equal(row['バリエーション項目選択肢2'], undefined);
   assert.deepEqual(warnings, []);
+});
+
+test('buildSkuRow: 販売価格が空欄の行はエラーを投げる(セット部品行など販売対象外のため)', () => {
+  const noPriceRow = {
+    '商品コード': 'x-part-01BLK',
+    '代表商品コード': 'x-part',
+    'サイズコード': '',
+    'カラーコード': '-01BLK',
+    'カラー': 'ブラック',
+    '販売価格': '',
+  };
+  assert.throws(() => buildSkuRow(noPriceRow), /販売価格が空欄または不正/);
+});
+
+test('buildSkuRow: 販売価格が0や不正な文字列の行もエラーを投げる', () => {
+  const zeroPriceRow = {
+    '商品コード': 'x-part-02BLK',
+    '代表商品コード': 'x-part',
+    'サイズコード': '',
+    'カラーコード': '-02BLK',
+    'カラー': 'ブラック',
+    '販売価格': '0',
+  };
+  assert.throws(() => buildSkuRow(zeroPriceRow), /販売価格が空欄または不正/);
 });
 
 test('buildSkuRow: すべてのサンプル行で例外を投げずに処理できる', () => {

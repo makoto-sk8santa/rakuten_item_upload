@@ -24,16 +24,25 @@ if (typeof require !== 'undefined') {
 function buildSkuRow(masterRow) {
   var warnings = [];
 
+  // 商品マスターには「通常商品」区分のまま販売価格が空欄の行が多数存在する
+  // （セット商品を組み立てるための部品行で、単体では販売対象ではない。実データで
+  // 全38,341行中12,687行=約33%を確認。docs/data-analysis.md 11章）。
+  // 誤って0円のSKUとして出力しないよう、価格が空欄・不正な行はエラーとして
+  // 呼び出し側(Main.jsのrunSkuExpansion)でスキップする。
+  var salePriceRaw = masterRow['販売価格'];
+  var salePrice = Number(salePriceRaw);
+  if (!String(salePriceRaw).trim() || !isFinite(salePrice) || salePrice <= 0) {
+    throw new Error(
+      '販売価格が空欄または不正です(商品コード=' + masterRow['商品コード'] + '): "' + salePriceRaw + '"。' +
+      '部品行など販売対象ではない可能性があります。'
+    );
+  }
+
   var systemLinkedSkuNumber = getSystemLinkedSkuNumber(masterRow);
   var skuManagementNumber = getSkuManagementNumber(masterRow);
   // 機種のバリエーション軸が無い商品(カラーバリエーションのみ等)では配列の要素数が
   // 少なくなる。先頭からKey0, Key1, ...として詰めて割り当てる。
   var variationLabels = buildVariation(masterRow);
-
-  var salePrice = Number(masterRow['販売価格']);
-  if (!isFinite(salePrice) || salePrice <= 0) {
-    warnings.push('販売価格が不正です(商品コード=' + masterRow['商品コード'] + '): ' + masterRow['販売価格']);
-  }
   var prices = calcPrices(salePrice);
 
   var row = {
