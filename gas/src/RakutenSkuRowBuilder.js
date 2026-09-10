@@ -26,7 +26,9 @@ function buildSkuRow(masterRow) {
 
   var systemLinkedSkuNumber = getSystemLinkedSkuNumber(masterRow);
   var skuManagementNumber = getSkuManagementNumber(masterRow);
-  var variation = buildVariation(masterRow);
+  // 機種のバリエーション軸が無い商品(カラーバリエーションのみ等)では配列の要素数が
+  // 少なくなる。先頭からKey0, Key1, ...として詰めて割り当てる。
+  var variationLabels = buildVariation(masterRow);
 
   var salePrice = Number(masterRow['販売価格']);
   if (!isFinite(salePrice) || salePrice <= 0) {
@@ -37,19 +39,15 @@ function buildSkuRow(masterRow) {
   var row = {
     'システム連携用SKU番号': systemLinkedSkuNumber,
     'SKU管理番号': skuManagementNumber,
-    'バリエーション項目キー1': 'Key0',
-    'バリエーション項目選択肢1': variation.Key0,
-    'バリエーション項目キー2': 'Key1',
-    'バリエーション項目選択肢2': variation.Key1,
-    'バリエーション項目キー3': 'Key2',
-    'バリエーション項目選択肢3': variation.Key2,
-    'バリエーション項目キー4': 'Key3',
-    'バリエーション項目選択肢4': variation.Key3,
     '通常購入販売価格': prices.normal,
     '表示価格': prices.display,
     '在庫数': DEFAULT_STOCK_COUNT,
     'カタログID': masterRow['識別コード'] || '',
   };
+  variationLabels.forEach(function (label, i) {
+    row['バリエーション項目キー' + (i + 1)] = 'Key' + i;
+    row['バリエーション項目選択肢' + (i + 1)] = label;
+  });
 
   return { row: row, warnings: warnings };
 }

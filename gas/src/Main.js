@@ -256,11 +256,16 @@ function writeSkuRows_(ss, outputRows) {
   sheet.clearContents();
   if (outputRows.length === 0) return;
 
-  var header = Object.keys(outputRows[0]);
+  // 商品によってバリエーション軸の数が異なる（機種の軸が無い商品など）ため、
+  // 出力行の中で最も列数が多いものに合わせてヘッダーを揃える
+  var header = outputRows.reduce(function (longest, row) {
+    var keys = Object.keys(row);
+    return keys.length > longest.length ? keys : longest;
+  }, []);
   var values = [header].concat(
     outputRows.map(function (row) {
       return header.map(function (key) {
-        return row[key];
+        return Object.prototype.hasOwnProperty.call(row, key) ? row[key] : '';
       });
     })
   );

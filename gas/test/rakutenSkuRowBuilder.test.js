@@ -42,6 +42,26 @@ test('buildSkuRow: 「名入れあり」(-P-9H)も価格は商品マスターの
   assert.deepEqual(warnings, []);
 });
 
+test('buildSkuRow: サイズコードが空欄の商品(機種の軸なし)は3軸分だけ出力し、4軸目は含まない', () => {
+  const colorOnly = {
+    '商品コード': 'x-color-only-01IVY',
+    'サイズコード': '',
+    'カラーコード': '-01IVY',
+    '識別コード': '1234567890123',
+    '販売価格': '1000',
+  };
+  const { row, warnings } = buildSkuRow(colorOnly);
+  assert.equal(row['バリエーション項目キー1'], 'Key0');
+  assert.equal(row['バリエーション項目選択肢1'], '01.ペールピンク');
+  assert.equal(row['バリエーション項目キー2'], 'Key1');
+  assert.equal(row['バリエーション項目選択肢2'], '名入れ無し');
+  assert.equal(row['バリエーション項目キー3'], 'Key2');
+  assert.equal(row['バリエーション項目選択肢3'], 'ケース単品');
+  assert.equal(row['バリエーション項目キー4'], undefined);
+  assert.equal(row['バリエーション項目選択肢4'], undefined);
+  assert.deepEqual(warnings, []);
+});
+
 test('buildSkuRow: すべてのサンプル行で例外を投げずに処理できる', () => {
   for (const m of masterSample) {
     assert.doesNotThrow(() => buildSkuRow(m), m['商品コード']);

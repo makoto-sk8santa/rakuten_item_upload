@@ -1,4 +1,4 @@
-// 商品マスターの1行から、楽天のバリエーション4軸（Key0〜Key3）を組み立てる。
+// 商品マスターの1行から、楽天のバリエーション軸（Key0, Key1, ...）を組み立てる。
 if (typeof require !== 'undefined') {
   var SkuRules = require('./SkuRules');
   var _VBConfig = require('./Config');
@@ -10,21 +10,30 @@ if (typeof require !== 'undefined') {
 }
 
 /**
- * 商品マスターの1行（1SKU相当）から Key0〜Key3 の表示名を組み立てる。
+ * 商品マスターの1行（1SKU相当）から、バリエーション軸の表示名を順番に並べた配列を組み立てる。
  * 機種・カラーは商品マスターの文字列を直接使わず、Config の対応表を正として使う
  * （商品マスターの「カラー」列は表記ゆれがあるため。docs/data-analysis.md 4章）。
+ *
+ * 「サイズコード」が空欄の商品は機種のバリエーション軸自体が無いもの（カラーバリエーション
+ * のみの商品など）として扱い、機種の軸を配列に含めない。ユーザー確認済み（2026-09-10）。
+ * 呼び出し側（RakutenSkuRowBuilder）は、返ってきた配列の先頭からKey0, Key1, ...として
+ * 詰めて割り当てる。
+ *
+ * @returns {string[]} バリエーション軸の表示名を先頭(Key0)から並べた配列
  */
 function buildVariation(masterRow) {
   var parsed = parseProductCode(masterRow);
+  var labels = [];
 
-  var kishuLabel = KISHU_LABEL_BY_SIZE_CODE[parsed.sizeCode];
-  if (!kishuLabel) {
-    throw new Error(
-      '未登録の機種(サイズコード)です: "' + parsed.sizeCode + '"' +
-      '(商品コード=' + masterRow['商品コード'] + ')。' +
-      (parsed.sizeCode ? 'Config.KISHU_LABEL_BY_SIZE_CODE に追加してください。' :
-        '商品マスターの「サイズコード」列が空欄になっています。')
-    );
+  if (parsed.sizeCode) {
+    var kishuLabel = KISHU_LABEL_BY_SIZE_CODE[parsed.sizeCode];
+    if (!kishuLabel) {
+      throw new Error(
+        '未登録の機種(サイズコード)です: "' + parsed.sizeCode + '"' +
+        '(商品コード=' + masterRow['商品コード'] + ')。Config.KISHU_LABEL_BY_SIZE_CODE に追加してください。'
+      );
+    }
+    labels.push(kishuLabel);
   }
 
   var colorLabel = COLOR_LABEL_BY_CODE[parsed.colorCode];
@@ -36,13 +45,12 @@ function buildVariation(masterRow) {
         '商品マスターの「カラーコード」列が空欄になっています。')
     );
   }
+  labels.push(colorLabel);
 
-  return {
-    Key0: kishuLabel,
-    Key1: colorLabel,
-    Key2: getAdditionalOptionLabel(parsed.suffix),
-    Key3: getSetOptionLabel(parsed.suffix),
-  };
+  labels.push(getAdditionalOptionLabel(parsed.suffix));
+  labels.push(getSetOptionLabel(parsed.suffix));
+
+  return labels;
 }
 
 if (typeof module !== 'undefined') {
