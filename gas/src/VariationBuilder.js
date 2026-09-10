@@ -20,16 +20,20 @@ function buildVariation(masterRow) {
   var kishuLabel = KISHU_LABEL_BY_SIZE_CODE[parsed.sizeCode];
   if (!kishuLabel) {
     throw new Error(
-      '未登録の機種(サイズコード)です: ' + parsed.sizeCode +
-      '。Config.KISHU_LABEL_BY_SIZE_CODE に追加してください。'
+      '未登録の機種(サイズコード)です: "' + parsed.sizeCode + '"' +
+      '(商品コード=' + masterRow['商品コード'] + ')。' +
+      (parsed.sizeCode ? 'Config.KISHU_LABEL_BY_SIZE_CODE に追加してください。' :
+        '商品マスターの「サイズコード」列が空欄になっています。')
     );
   }
 
   var colorLabel = COLOR_LABEL_BY_CODE[parsed.colorCode];
   if (!colorLabel) {
     throw new Error(
-      '未登録のカラーコードです: ' + parsed.colorCode +
-      '。Config.COLOR_LABEL_BY_CODE に追加してください。'
+      '未登録のカラーコードです: "' + parsed.colorCode + '"' +
+      '(商品コード=' + masterRow['商品コード'] + ')。' +
+      (parsed.colorCode ? 'Config.COLOR_LABEL_BY_CODE に追加してください。' :
+        '商品マスターの「カラーコード」列が空欄になっています。')
     );
   }
 

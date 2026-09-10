@@ -121,17 +121,34 @@ function runSkuExpansion() {
 
   var outputRows = [];
   var allWarnings = [];
+  var skuErrors = [];
   masterRows
     .filter(function (row) {
       return targetCodes.indexOf(row['代表商品コード']) !== -1;
     })
     .forEach(function (row) {
-      var result = buildSkuRow(row);
-      outputRows.push(result.row);
-      allWarnings = allWarnings.concat(result.warnings);
+      // 1商品コードの不備（サイズコード/カラーコード未登録など）で全体を止めないよう、
+      // 行単位でエラーを捕捉して処理を継続する。エラーになった行はSKU行を出力しない。
+      try {
+        var result = buildSkuRow(row);
+        outputRows.push(result.row);
+        allWarnings = allWarnings.concat(result.warnings);
+      } catch (e) {
+        skuErrors.push('商品コード=' + row['商品コード'] + ': ' + e.message);
+      }
     });
 
   writeSkuRows_(ss, outputRows);
+
+  if (skuErrors.length > 0) {
+    SpreadsheetApp.getUi().alert(
+      'エラーで出力できなかった商品コードが ' + skuErrors.length + ' 件あります。' +
+      '詳細はログ(表示 > ログ)を確認し、商品マスターを修正してから再実行してください。'
+    );
+    skuErrors.forEach(function (e) {
+      Logger.log(e);
+    });
+  }
 
   if (allWarnings.length > 0) {
     SpreadsheetApp.getUi().alert(
