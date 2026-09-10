@@ -7,6 +7,10 @@ var MASTER_SHEET_NAME = '商品マスター';
 var TARGET_SHEET_NAME = '楽天登録対象';
 var OUTPUT_SHEET_NAME = '楽天SKU展開';
 var IMAGE_OUTPUT_SHEET_NAME = '楽天商品画像';
+// 機種・カラー以外の追加バリエーション軸（タイプ、文字入れの有無等）を商品ごとに
+// 人力で登録しておくシート。無くてもエラーにはしない（該当商品が無ければ単に使わない）。
+// docs/data-analysis.md 12.3節(4)参照。
+var EXTRA_VARIATION_SHEET_NAME = '追加バリエーション設定';
 var REGISTRATION_TARGET_COLUMN_NAME = '登録対象';
 // プルダウンを設定しておく行数の余裕分（既存行数にこの分を足した範囲まで設定する）
 var TARGET_VALIDATION_ROW_BUFFER = 200;
@@ -118,6 +122,7 @@ function runSkuExpansion() {
 
   var targetCodes = readTargetRepresentativeCodes_(targetSheet);
   var masterRows = readSheetAsObjects_(masterSheet);
+  var extraVariationByCode = readExtraVariationByProductCode_(ss);
 
   var outputRows = [];
   var allWarnings = [];
@@ -130,7 +135,7 @@ function runSkuExpansion() {
       // 1商品コードの不備（サイズコード/カラーコード未登録など）で全体を止めないよう、
       // 行単位でエラーを捕捉して処理を継続する。エラーになった行はSKU行を出力しない。
       try {
-        var result = buildSkuRow(row);
+        var result = buildSkuRow(row, extraVariationByCode[row['商品コード']]);
         outputRows.push(result.row);
         allWarnings = allWarnings.concat(result.warnings);
       } catch (e) {
@@ -237,6 +242,16 @@ function readTargetRepresentativeCodes_(targetSheet) {
     .map(function (row) {
       return row['代表商品コード'];
     });
+}
+
+/**
+ * 「追加バリエーション設定」シートを商品コードをキーにしたマップとして読み込む。
+ * シート自体が無い場合は空のマップを返す（未登録の商品は追加軸なしのまま処理される）。
+ */
+function readExtraVariationByProductCode_(ss) {
+  var sheet = ss.getSheetByName(EXTRA_VARIATION_SHEET_NAME);
+  if (!sheet) return {};
+  return indexExtraVariationRowsByProductCode(readSheetAsObjects_(sheet));
 }
 
 function readSheetAsObjects_(sheet) {

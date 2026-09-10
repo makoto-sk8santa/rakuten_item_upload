@@ -14,6 +14,7 @@ gas/
     VariationBuilder.js     バリエーション4軸(Key0〜Key3)の組み立て
     ImagePathBuilder.js     商品画像パス(商品画像タイプN／パスN)の組み立て
     TargetSync.js           商品マスターの代表商品コードと「楽天登録対象」の差分検出
+    ExtraVariationLookup.js 「追加バリエーション設定」シートからの追加軸(タイプ等)の読み込み
     RakutenSkuRowBuilder.js 商品マスター1行→楽天SKU行の組み立て（区分A・Bのみ）
     Main.js                 GASのエントリーポイント（スプレッドシート連携、Node非対応）
   test/
@@ -22,7 +23,7 @@ gas/
 ```
 
 `Config.js` / `SkuRules.js` / `VariationBuilder.js` / `ImagePathBuilder.js` / `TargetSync.js` /
-`RakutenSkuRowBuilder.js` は `if (typeof require !== 'undefined') / if (typeof module !== 'undefined')`
+`ExtraVariationLookup.js` / `RakutenSkuRowBuilder.js` は `if (typeof require !== 'undefined') / if (typeof module !== 'undefined')`
 で GAS・Node.js 双方から読み込めるようにしてある。ロジックの正しさは Node.js 上でテストし、
 実際の反映は `clasp push` で Apps Script に取り込む。
 
@@ -67,6 +68,8 @@ node --test gas/test/*.test.js
   - 「追加オプション」「お得なセット」の軸（P/MG/9H接尾辞ルール）は、この規則が確認できている
     `Config.SUFFIX_OPTION_AXES_REPRESENTATIVE_CODES` 登録済みの代表商品コード（現状f-bic-prtのみ）
     にだけ適用する。全商品の96%はこの規則に当てはまらない別の接尾辞語彙を使っているため
+  - それ以外の追加軸（タイプ、文字入れの有無、花種類等、全体の36%の商品で必要）は、商品コードごとに
+    「追加バリエーション設定」シートへ人力で登録しておいた値を読み込む（下記参照。2026-09-10確定）
 - 通常購入販売価格／表示価格（区分A：商品マスターの `販売価格` をそのまま使用。
   ダウンロード時点の楽天CSVはセール中の価格だったため、そちらの数式は不採用。2026-09-09確定。
   全商品を確認しても同じ傾向だった）
@@ -74,6 +77,14 @@ node --test gas/test/*.test.js
 - カタログID（区分A）
 - 販売価格が空欄・0・不正な行はエラーとしてスキップする（全商品の33%が該当。セット商品を
   組み立てるための「部品」行で、単体では販売対象ではないため。2026-09-10確定）
+
+**追加バリエーション設定**（`ExtraVariationLookup` → `RakutenSkuRowBuilder.buildSkuRow`に自動連携）：
+- 機種・カラー以外の軸（タイプ、文字入れの有無、花種類等）が必要な商品用に、あらかじめ
+  「追加バリエーション設定」シートへ商品コードごとに登録しておく仕組み。列構成：
+  `商品コード, 追加軸1軸名, 追加軸1選択肢, 追加軸2軸名, 追加軸2選択肢`（最大2軸まで対応）。
+- 商品コードが一致する行があれば、その選択肢を機種・カラー（等）の後ろに続けて出力する。
+  一致する行が無い商品はそのまま機種・カラーのみで出力される（エラーにはならない）。
+- シート自体が存在しなくてもエラーにはならない（該当商品が無いのと同じ扱いになる）。
 
 **商品画像パス**（`ImagePathBuilder.buildImageColumns` → メニュー「商品画像パスを生成」）：
 - 商品画像タイプN（区分C：常に `CABINET`）
@@ -84,9 +95,7 @@ node --test gas/test/*.test.js
   ダイアログにはしていない（複数商品の一括処理で毎回手が止まるため）。
 
 **未実装（残タスク）**：
-- 機種・カラー以外の追加バリエーション軸（タイプ／メタルアタッチメント／花種類／文字入れの有無等）：
-  全商品の36%がこの種の軸を必要としているが、商品マスターの45列からは自動生成できない。
-  対応方針は未確定（`docs/data-analysis.md` 12.3節(4)の案(a)〜(c)を参照）。
+- 実際のスプレッドシートに「追加バリエーション設定」シートを追加する（運用側の対応。列見出しは上記参照）。
 - 区分C（上記以外の固定値・設定マスター）：現状はスプレッドシート「設定・固定値マスター」シートで
   人間が管理する想定。`Main.js` の SKU行出力に合成する処理は未実装。
 - 区分D（AI生成：商品名／説明文／画像ALT等）：Phase2で対応。

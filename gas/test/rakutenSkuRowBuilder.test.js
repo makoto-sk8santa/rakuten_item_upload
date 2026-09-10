@@ -86,6 +86,27 @@ test('buildSkuRow: 販売価格が0や不正な文字列の行もエラーを投
   assert.throws(() => buildSkuRow(zeroPriceRow), /販売価格が空欄または不正/);
 });
 
+test('buildSkuRow: 「追加バリエーション設定」に登録があれば機種・カラーの後ろに追加軸を続ける', () => {
+  const withType = {
+    '商品コード': 'x-typed-01BLK',
+    '代表商品コード': 'x-typed',
+    'サイズコード': '',
+    'カラーコード': '-01BLK',
+    'カラー': 'ブラック',
+    '販売価格': '1500',
+  };
+  const extraVariationRow = {
+    '商品コード': 'x-typed-01BLK',
+    '追加軸1軸名': 'タイプ',
+    '追加軸1選択肢': 'スタンダード',
+  };
+  const { row, warnings } = buildSkuRow(withType, extraVariationRow);
+  assert.equal(row['バリエーション項目選択肢1'], 'ブラック');
+  assert.equal(row['バリエーション項目キー2'], 'Key1');
+  assert.equal(row['バリエーション項目選択肢2'], 'スタンダード');
+  assert.deepEqual(warnings, []);
+});
+
 test('buildSkuRow: すべてのサンプル行で例外を投げずに処理できる', () => {
   for (const m of masterSample) {
     assert.doesNotThrow(() => buildSkuRow(m), m['商品コード']);
