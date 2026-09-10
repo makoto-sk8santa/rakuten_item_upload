@@ -13,6 +13,7 @@ gas/
     SkuRules.js            商品コード解析、SKU番号算出・価格決定（純粋関数、GAS/Node両対応）
     VariationBuilder.js     バリエーション4軸(Key0〜Key3)の組み立て
     ImagePathBuilder.js     商品画像パス(商品画像タイプN／パスN)の組み立て
+    TargetSync.js           商品マスターの代表商品コードと「楽天登録対象」の差分検出
     RakutenSkuRowBuilder.js 商品マスター1行→楽天SKU行の組み立て（区分A・Bのみ）
     Main.js                 GASのエントリーポイント（スプレッドシート連携、Node非対応）
   test/
@@ -20,7 +21,7 @@ gas/
     fixtures/               実データから抽出したテスト用サンプル（価格・SKU番号を含む）
 ```
 
-`Config.js` / `SkuRules.js` / `VariationBuilder.js` / `ImagePathBuilder.js` /
+`Config.js` / `SkuRules.js` / `VariationBuilder.js` / `ImagePathBuilder.js` / `TargetSync.js` /
 `RakutenSkuRowBuilder.js` は `if (typeof require !== 'undefined') / if (typeof module !== 'undefined')`
 で GAS・Node.js 双方から読み込めるようにしてある。ロジックの正しさは Node.js 上でテストし、
 実際の反映は `clasp push` で Apps Script に取り込む。
@@ -41,6 +42,12 @@ node --test gas/test/*.test.js
 
 `docs/reference/column-mapping.csv` の区分のうち、以下を実装済み：
 
+**登録対象の候補追加**（`TargetSync.getMissingRepresentativeCodes` → メニュー「登録対象の候補を商品マスターから追加」）：
+- 商品マスターを貼り付けただけでは「楽天登録対象」シートは自動更新されない。この
+  メニューを実行すると、商品マスターにある代表商品コードのうち「楽天登録対象」に
+  まだ無いものを、登録対象=FALSEの行として追加する（既存行のTRUE/FALSEや入力済みの
+  画像枚数などは変更しない、差分追加のみ）。
+
 **SKU行**（`RakutenSkuRowBuilder.buildSkuRow` → メニュー「SKU展開を実行」）：
 - システム連携用SKU番号（区分A：商品マスターの商品コードをそのまま）
 - SKU管理番号（区分B：新規登録なので商品コードそのまま。2026-09-09確定）
@@ -59,7 +66,6 @@ node --test gas/test/*.test.js
   ダイアログにはしていない（複数商品の一括処理で毎回手が止まるため）。
 
 **未実装（残タスク）**：
-- シート2「楽天登録対象」への「画像枚数」列の追加（運用側の対応）。
 - 区分C（上記以外の固定値・設定マスター）：現状はスプレッドシート「設定・固定値マスター」シートで
   人間が管理する想定。`Main.js` の SKU行出力に合成する処理は未実装。
 - 区分D（AI生成：商品名／説明文／画像ALT等）：Phase2で対応。

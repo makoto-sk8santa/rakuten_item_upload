@@ -11,9 +11,56 @@ var IMAGE_OUTPUT_SHEET_NAME = '楽天商品画像';
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('楽天登録データ作成')
+    .addItem('登録対象の候補を商品マスターから追加', 'syncTargetCandidates')
     .addItem('SKU展開を実行', 'runSkuExpansion')
     .addItem('商品画像パスを生成', 'runImageColumnGeneration')
     .addToUi();
+}
+
+/**
+ * 「商品マスター」シートの代表商品コードのうち、「楽天登録対象」シートに
+ * まだ無いものを新規行として追加する（登録対象=FALSEで追加するので、
+ * 実際に処理したい商品だけ人間が後からTRUEにする）。
+ *
+ * 商品マスターは1年分などまとめて蓄積されていく想定のため、貼り付けただけで
+ * 自動的に「楽天登録対象」へ反映されるわけではない。この関数を都度実行して
+ * 差分を反映する運用にしている。
+ */
+function syncTargetCandidates() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var masterSheet = ss.getSheetByName(MASTER_SHEET_NAME);
+  var targetSheet = ss.getSheetByName(TARGET_SHEET_NAME);
+  if (!masterSheet || !targetSheet) {
+    throw new Error('「' + MASTER_SHEET_NAME + '」または「' + TARGET_SHEET_NAME + '」シートが見つかりません。');
+  }
+
+  var masterRows = readSheetAsObjects_(masterSheet);
+  var existingTargetRows = readSheetAsObjects_(targetSheet);
+  var existingCodes = existingTargetRows.map(function (row) {
+    return row['代表商品コード'];
+  });
+
+  var missingCodes = getMissingRepresentativeCodes(masterRows, existingCodes);
+  if (missingCodes.length === 0) {
+    SpreadsheetApp.getUi().alert('追加対象はありません（商品マスターの代表商品コードはすべて反映済みです）。');
+    return;
+  }
+
+  var header = targetSheet.getRange(1, 1, 1, targetSheet.getLastColumn()).getValues()[0];
+  var newRows = missingCodes.map(function (code) {
+    var rowObj = buildTargetRow(code);
+    return header.map(function (key) {
+      return Object.prototype.hasOwnProperty.call(rowObj, key) ? rowObj[key] : '';
+    });
+  });
+  targetSheet
+    .getRange(targetSheet.getLastRow() + 1, 1, newRows.length, header.length)
+    .setValues(newRows);
+
+  SpreadsheetApp.getUi().alert(
+    missingCodes.length + '件の代表商品コードを「' + TARGET_SHEET_NAME + '」に追加しました(登録対象=FALSE)。' +
+    '処理したい商品だけ登録対象をTRUEにしてください。'
+  );
 }
 
 /**
