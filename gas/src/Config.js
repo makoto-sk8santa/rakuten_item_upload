@@ -78,6 +78,15 @@ var IMAGE_TYPE = 'CABINET';
 var FIRST_IMAGE_DIR = '/top/';
 var OTHER_IMAGE_DIR = '/sumahoya10/';
 
+// Phase2：商品名・キャッチコピーのAI生成（docs/spec.md 15章）。
+// AIにはClaude APIを使う（ユーザー確認済み。2026-09-16）。
+// APIキーはコードに直接書かず、スクリプトプロパティ(PropertiesService)に保存する
+// （メニュー「APIキーを設定(Claude)」から設定。Main.js参照）。
+var CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
+var CLAUDE_MODEL = 'claude-sonnet-5';
+var CLAUDE_MAX_TOKENS = 1024;
+var CLAUDE_API_KEY_PROPERTY = 'CLAUDE_API_KEY';
+
 if (typeof module !== 'undefined') {
   module.exports = {
     KISHU_LABEL_OVERRIDES: KISHU_LABEL_OVERRIDES,
@@ -89,5 +98,9 @@ if (typeof module !== 'undefined') {
     IMAGE_TYPE: IMAGE_TYPE,
     FIRST_IMAGE_DIR: FIRST_IMAGE_DIR,
     OTHER_IMAGE_DIR: OTHER_IMAGE_DIR,
+    CLAUDE_API_URL: CLAUDE_API_URL,
+    CLAUDE_MODEL: CLAUDE_MODEL,
+    CLAUDE_MAX_TOKENS: CLAUDE_MAX_TOKENS,
+    CLAUDE_API_KEY_PROPERTY: CLAUDE_API_KEY_PROPERTY,
   };
 }

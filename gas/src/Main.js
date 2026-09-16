@@ -14,9 +14,16 @@ var ERROR_SHEET_NAME = 'エラー一覧';
 // 人力で登録しておくシート。無くてもエラーにはしない（該当商品が無ければ単に使わない）。
 // docs/data-analysis.md 12.3節(4)参照。
 var EXTRA_VARIATION_SHEET_NAME = '追加バリエーション設定';
+// Phase2：商品名・キャッチコピーのAI生成用シート（docs/spec.md シート4を、
+// 最初のスコープ「商品名・キャッチコピー」に絞って実装したもの）。
+var AI_GENERATION_SHEET_NAME = 'AI生成';
 var REGISTRATION_TARGET_COLUMN_NAME = '登録対象';
 // プルダウンを設定しておく行数の余裕分（既存行数にこの分を足した範囲まで設定する）
 var TARGET_VALIDATION_ROW_BUFFER = 200;
+// AI生成が完了した内容を人間が確認済みであることを示すステータス。
+// このステータスの行は、AI生成を再実行しても上書きしない（誤って確認済み内容を
+// 消さないための安全策。docs/spec.md 13章「AI生成文の安全策」参照）。
+var AI_GENERATION_CONFIRMED_STATUS = '人間確認済';
 
 function onOpen() {
   SpreadsheetApp.getUi()
@@ -25,6 +32,10 @@ function onOpen() {
     .addItem('登録対象列にプルダウンを設定', 'setupRegistrationDropdown')
     .addItem('SKU展開を実行', 'runSkuExpansion')
     .addItem('商品画像パスを生成', 'runImageColumnGeneration')
+    .addSeparator()
+    .addItem('APIキーを設定(Claude)', 'setClaudeApiKey')
+    .addItem('AI生成シートに登録対象を反映', 'syncAiGenerationCandidates')
+    .addItem('商品名・キャッチコピーをAI生成', 'runAiTextGeneration')
     .addToUi();
 }
 
@@ -213,6 +224,195 @@ function runImageColumnGeneration() {
       'シートに画像枚数を入力してから再実行してください。「' + ERROR_SHEET_NAME + '」シートに詳細を書き出しました。'
     );
   }
+}
+
+/**
+ * Claude APIキーをスクリプトプロパティに保存する。コードやスプレッドシートのセルに
+ * 直接書かないことで、シートを共有してもキーが漏れないようにする。
+ */
+function setClaudeApiKey() {
+  var ui = SpreadsheetApp.getUi();
+  var response = ui.prompt(
+    'Claude APIキーの設定',
+    'Anthropic Consoleで発行したClaude APIキーを入力してください。',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (response.getSelectedButton() !== ui.Button.OK) return;
+  var apiKey = response.getResponseText().trim();
+  if (!apiKey) {
+    ui.alert('APIキーが入力されていません。');
+    return;
+  }
+  PropertiesService.getScriptProperties().setProperty(CLAUDE_API_KEY_PROPERTY, apiKey);
+  ui.alert('Claude APIキーを保存しました。');
+}
+
+/**
+ * 「楽天登録対象」シートでONになっている代表商品コードのうち、「AI生成」シートに
+ * まだ無いものを新規行として追加する（syncTargetCandidatesと同様の差分追加方式）。
+ * 特徴・素材等の補足情報は空欄で追加するので、AI生成を実行する前に人間が入力する。
+ */
+function syncAiGenerationCandidates() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var targetSheet = ss.getSheetByName(TARGET_SHEET_NAME);
+  var aiSheet = ss.getSheetByName(AI_GENERATION_SHEET_NAME);
+  if (!targetSheet || !aiSheet) {
+    throw new Error('「' + TARGET_SHEET_NAME + '」または「' + AI_GENERATION_SHEET_NAME + '」シートが見つかりません。');
+  }
+
+  var targetCodes = readTargetRepresentativeCodes_(targetSheet);
+  var existingAiRows = readSheetAsObjects_(aiSheet);
+  var existingCodes = existingAiRows.map(function (row) {
+    return row['代表商品コード'];
+  });
+  var missingCodes = targetCodes.filter(function (code) {
+    return existingCodes.indexOf(code) === -1;
+  });
+
+  if (missingCodes.length === 0) {
+    SpreadsheetApp.getUi().alert('追加対象はありません（登録対象の代表商品コードはすべて反映済みです）。');
+    return;
+  }
+
+  var header = aiSheet.getRange(1, 1, 1, aiSheet.getLastColumn()).getValues()[0];
+  var newRows = missingCodes.map(function (code) {
+    var rowObj = buildAiGenerationRow(code);
+    return header.map(function (key) {
+      return Object.prototype.hasOwnProperty.call(rowObj, key) ? rowObj[key] : '';
+    });
+  });
+  aiSheet
+    .getRange(aiSheet.getLastRow() + 1, 1, newRows.length, header.length)
+    .setValues(newRows);
+
+  SpreadsheetApp.getUi().alert(
+    missingCodes.length + '件の代表商品コードを「' + AI_GENERATION_SHEET_NAME + '」に追加しました。' +
+    '特徴・素材等の補足情報を入力してから「商品名・キャッチコピーをAI生成」を実行してください。'
+  );
+}
+
+/**
+ * 「楽天登録対象」でONになっている代表商品コードについて、商品名・キャッチコピーを
+ * Claude APIで生成し、「AI生成」シートに書き戻す。
+ *
+ * ・ステータスが「人間確認済」の行は上書きしない（docs/spec.md 13章の安全策）。
+ * ・1商品の失敗で全体を止めないよう、行単位でエラーを捕捉して処理を継続する
+ *   （runSkuExpansionと同じ方針）。
+ */
+function runAiTextGeneration() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var masterSheet = ss.getSheetByName(MASTER_SHEET_NAME);
+  var targetSheet = ss.getSheetByName(TARGET_SHEET_NAME);
+  var aiSheet = ss.getSheetByName(AI_GENERATION_SHEET_NAME);
+  if (!masterSheet || !targetSheet || !aiSheet) {
+    throw new Error(
+      '「' + MASTER_SHEET_NAME + '」「' + TARGET_SHEET_NAME + '」「' + AI_GENERATION_SHEET_NAME +
+      '」のいずれかのシートが見つかりません。'
+    );
+  }
+
+  var apiKey = PropertiesService.getScriptProperties().getProperty(CLAUDE_API_KEY_PROPERTY);
+  if (!apiKey) {
+    throw new Error('Claude APIキーが設定されていません。メニューの「APIキーを設定(Claude)」から設定してください。');
+  }
+
+  var targetCodes = readTargetRepresentativeCodes_(targetSheet);
+  var masterRowsByCode = groupByRepresentativeCode_(readSheetAsObjects_(masterSheet));
+
+  var aiHeader = aiSheet.getRange(1, 1, 1, aiSheet.getLastColumn()).getValues()[0];
+  var codeColIndex = aiHeader.indexOf('代表商品コード');
+  var statusColIndex = aiHeader.indexOf('ステータス');
+  var nameColIndex = aiHeader.indexOf('生成商品名');
+  var catchColIndex = aiHeader.indexOf('生成キャッチコピー');
+  var updatedAtColIndex = aiHeader.indexOf('最終生成日時');
+  if (codeColIndex === -1 || statusColIndex === -1 || nameColIndex === -1 || catchColIndex === -1) {
+    throw new Error(
+      '「' + AI_GENERATION_SHEET_NAME + '」シートの列構成が想定と異なります' +
+      '（代表商品コード・ステータス・生成商品名・生成キャッチコピーの列が必要です）。'
+    );
+  }
+
+  var aiValues = aiSheet.getDataRange().getValues();
+  var errors = [];
+  var generatedCount = 0;
+
+  for (var i = 1; i < aiValues.length; i++) {
+    var row = aiValues[i];
+    var code = row[codeColIndex];
+    if (!code || targetCodes.indexOf(code) === -1) continue;
+    if (row[statusColIndex] === AI_GENERATION_CONFIRMED_STATUS) continue;
+
+    var aiInputRow = {};
+    aiHeader.forEach(function (key, idx) {
+      aiInputRow[key] = row[idx];
+    });
+
+    try {
+      var summary = buildAiInputSummary(masterRowsByCode[code] || [], aiInputRow);
+      var prompt = buildProductNamePrompt(summary);
+      var responseText = callClaudeApi_(apiKey, prompt);
+      var result = parseAiTextResponse(responseText);
+
+      aiSheet.getRange(i + 1, nameColIndex + 1).setValue(result.productName);
+      aiSheet.getRange(i + 1, catchColIndex + 1).setValue(result.catchCopy);
+      aiSheet.getRange(i + 1, statusColIndex + 1).setValue('生成済');
+      if (updatedAtColIndex !== -1) {
+        aiSheet.getRange(i + 1, updatedAtColIndex + 1).setValue(new Date());
+      }
+      generatedCount++;
+    } catch (e) {
+      errors.push({ code: code, message: e.message + '\n' + (e.stack || '') });
+    }
+  }
+
+  writeErrorRows_(ss, errors);
+
+  var message = generatedCount + '件の商品名・キャッチコピーを生成しました。';
+  if (errors.length > 0) {
+    message += '\n' + errors.length + '件エラーになりました。「' + ERROR_SHEET_NAME + '」シートを確認してください。';
+  }
+  SpreadsheetApp.getUi().alert(message);
+}
+
+function groupByRepresentativeCode_(masterRows) {
+  var byCode = {};
+  masterRows.forEach(function (row) {
+    var code = row['代表商品コード'];
+    if (!code) return;
+    if (!byCode[code]) byCode[code] = [];
+    byCode[code].push(row);
+  });
+  return byCode;
+}
+
+/** Claude API(Messages API)を呼び出し、応答テキスト本文を返す。 */
+function callClaudeApi_(apiKey, prompt) {
+  var payload = {
+    model: CLAUDE_MODEL,
+    max_tokens: CLAUDE_MAX_TOKENS,
+    messages: [{ role: 'user', content: prompt }],
+  };
+  var options = {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+  };
+  var response = UrlFetchApp.fetch(CLAUDE_API_URL, options);
+  var statusCode = response.getResponseCode();
+  var body = response.getContentText();
+  if (statusCode !== 200) {
+    throw new Error('Claude APIの呼び出しに失敗しました(status=' + statusCode + '): ' + body);
+  }
+  var json = JSON.parse(body);
+  if (!json.content || !json.content[0] || !json.content[0].text) {
+    throw new Error('Claude APIの応答形式が想定と異なります: ' + body);
+  }
+  return json.content[0].text;
 }
 
 /**

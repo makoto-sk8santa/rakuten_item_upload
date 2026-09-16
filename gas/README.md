@@ -16,6 +16,8 @@ gas/
     TargetSync.js           商品マスターの代表商品コードと「楽天登録対象」の差分検出
     ExtraVariationLookup.js 「追加バリエーション設定」シートからの追加軸(タイプ等)の読み込み
     RakutenSkuRowBuilder.js 商品マスター1行→楽天SKU行の組み立て（区分A・Bのみ）
+    AiTextGeneration.js     商品名・キャッチコピーのAI生成用プロンプト組み立て・応答パース（Phase2）
+    AiGenerationSync.js     「AI生成」シートへの登録対象反映（差分追加）
     Main.js                 GASのエントリーポイント（スプレッドシート連携、Node非対応）
   test/
     *.test.js              Node.js組み込みテストランナーによるユニットテスト
@@ -23,7 +25,8 @@ gas/
 ```
 
 `Config.js` / `SkuRules.js` / `VariationBuilder.js` / `ImagePathBuilder.js` / `TargetSync.js` /
-`ExtraVariationLookup.js` / `RakutenSkuRowBuilder.js` は `if (typeof require !== 'undefined') / if (typeof module !== 'undefined')`
+`ExtraVariationLookup.js` / `RakutenSkuRowBuilder.js` / `AiTextGeneration.js` / `AiGenerationSync.js` は
+`if (typeof require !== 'undefined') / if (typeof module !== 'undefined')`
 で GAS・Node.js 双方から読み込めるようにしてある。ロジックの正しさは Node.js 上でテストし、
 実際の反映は `clasp push` で Apps Script に取り込む。
 
@@ -99,11 +102,48 @@ node --test gas/test/*.test.js
   行を「エラー一覧」シート（`対象コード`, `エラー内容`）に書き出す。実行のたびに前回分を
   上書きするので、常に直近の実行結果を反映する。
 
+## Phase2：商品名・キャッチコピーのAI生成
+
+`docs/spec.md` 15章のPhase2（AI文章生成）の最初のスコープとして、商品名・キャッチコピーの
+AI生成を実装した（2026-09-16。使用AIはClaude API。ユーザー確認済み）。商品説明文・検索
+キーワード・画像ALT等は未実装（今後、対象を追加していく想定）。
+
+**APIキーの設定**（メニュー「APIキーを設定(Claude)」）：
+- Anthropic ConsoleのClaude APIキーを、スクリプトプロパティ(`PropertiesService`)に保存する。
+  スプレッドシートのセルやコードに直接書かないことで、シートを共有してもキーが漏れないように
+  している。
+
+**「AI生成」シート**（新規シート。列構成：`代表商品コード, 特徴, 素材, 対応機種, 付属品,
+オプション, その他メモ, 生成商品名, 生成キャッチコピー, ステータス, 最終生成日時`）：
+- 商品マスターには無い「特徴」「素材」「対応機種」等の情報は、商品ごとにこのシートへ
+  人力で補足入力する運用にした（ユーザー確認済み。商品マスターの既存列だけでは
+  AIへの入力情報として不十分なため。2026-09-16）。
+- メニュー「AI生成シートに登録対象を反映」で、「楽天登録対象」がTRUEの代表商品コードのうち
+  まだ「AI生成」シートに無いものを、ステータス=未生成・補足情報は空欄で追加する
+  （`syncTargetCandidates` と同様の差分追加方式）。
+
+**AI生成の実行**（`AiTextGeneration.buildAiInputSummary` / `buildProductNamePrompt` /
+`parseAiTextResponse` → メニュー「商品名・キャッチコピーをAI生成」）：
+- 「楽天登録対象」でONの代表商品コードについて、商品マスター（現行の商品名・機種・カラー・
+  商品タグ・販売価格）と「AI生成」シートの補足情報（特徴・素材・対応機種・付属品・
+  オプション・その他メモ）をまとめてプロンプトを組み立て、Claude APIへ渡す。
+- AIの出力はJSON形式（`{"product_name":...,"catch_copy":...}`）に固定し、パースして
+  「AI生成」シートの生成商品名・生成キャッチコピー列に書き戻す。ステータスは「生成済」になる。
+- 「対応機種」「素材」「価格」などの事実情報は、プロンプトに含めた情報の範囲だけを使い、
+  AIが勝手に追加・変更しないようプロンプト内の注意事項で明記している
+  （`docs/spec.md` 13章「AI生成文の安全策」）。
+- ステータスが「人間確認済」の行は再実行しても上書きしない。確認後に人間が「人間確認済」に
+  更新することで、以降のAI再生成から保護される（同13章）。
+- 1商品の失敗（APIエラー・応答形式不正等）で全体を止めないよう、`runSkuExpansion` と同様に
+  代表商品コード単位でエラーを捕捉し、「エラー一覧」シートに書き出す。
+
 **未実装（残タスク）**：
-- 実際のスプレッドシートに「追加バリエーション設定」シートを追加する（運用側の対応。列見出しは上記参照）。
+- 実際のスプレッドシートに「追加バリエーション設定」「AI生成」シートを追加する
+  （運用側の対応。列見出しは上記参照）。
 - 区分C（上記以外の固定値・設定マスター）：現状はスプレッドシート「設定・固定値マスター」シートで
   人間が管理する想定。`Main.js` の SKU行出力に合成する処理は未実装。
-- 区分D（AI生成：商品名／説明文／画像ALT等）：Phase2で対応。
+- 区分D（AI生成）の残り：商品説明文（PC/スマホ）・検索キーワード・画像ALT等。Phase2の
+  スコープ拡大時に対応。
 - 画像ファイルの実体アップロード運用の確認：`docs/data-analysis.md` の「次のアクション」を参照。
 
 ## Apps Script への反映（clasp）
